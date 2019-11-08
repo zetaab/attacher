@@ -1,19 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
-	"github.com/spf13/cobra"
-	cinder "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/volumeattach"
 	"github.com/gophercloud/gophercloud/openstack/blockstorage/extensions/volumeactions"
+	cinder "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/volumeattach"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
+	"github.com/mitchellh/mapstructure"
+	"github.com/spf13/cobra"
+)
+
+const (
+	floating = "floating"
 )
 
 func init() {
@@ -69,7 +76,7 @@ func Run() {
 	}
 
 	if detach {
-		glog.Infof("Waiting 60secs for detaching the volumes")
+		glog.Infof("Waiting 60 secs for detaching the volumes")
 		time.Sleep(60 * time.Second)
 	}
 
@@ -92,7 +99,24 @@ func Run() {
 		})
 
 	}
-	time.Sleep(30 * time.Second)
+	glog.Infof("Waiting 60 secs for attach volumes")
+	time.Sleep(60 * time.Second)
+
+	username := "centos"
+	if os.Getenv("ATTACHER_USERNAME") != "" {
+		username = os.Getenv("ATTACHER_USERNAME")
+	}
+	for _, instance := range instances {
+		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, instance.Addr), "ls -l /dev/vd* && ls /dev/disk/by-id/*")
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		var serr bytes.Buffer
+		cmd.Stderr = &serr
+		cmd.Run()
+		glog.Infof("Instance ID %s", instance.ID)
+		glog.Infof("stdout: \n%s", out.String())
+		glog.Infof("stderr: \n%s\n", serr.String())
+	}
 }
 
 func attach(client *gophercloud.ServiceClient, serverID string, opts volumeattach.CreateOpts) {
@@ -102,13 +126,23 @@ func attach(client *gophercloud.ServiceClient, serverID string, opts volumeattac
 	}
 }
 
-
 type Osutils struct {
 	Compute *gophercloud.ServiceClient
 	Volume  *gophercloud.ServiceClient
 }
 
-func ListInstances(client *gophercloud.ServiceClient) ([]servers.Server, error)  {
+type instance struct {
+	ID   string
+	Addr string
+}
+
+// Address is struct for openstack instance interface addresses
+type Address struct {
+	IPType string `mapstructure:"OS-EXT-IPS:type"`
+	Addr   string
+}
+
+func ListInstances(client *gophercloud.ServiceClient) ([]instance, error) {
 	opt := servers.ListOpts{}
 	allPages, err := servers.List(client, opt).AllPages()
 	if err != nil {
@@ -119,7 +153,29 @@ func ListInstances(client *gophercloud.ServiceClient) ([]servers.Server, error) 
 	if err != nil {
 		return nil, fmt.Errorf("error extracting servers from pages: %v", err)
 	}
-	return ss, nil
+
+	result := []instance{}
+	for _, osInstance := range ss {
+		address := ""
+		for _, val := range osInstance.Addresses {
+			var addresses []Address
+			err := mapstructure.Decode(val, &addresses)
+			if err != nil {
+				return result, err
+			}
+			for _, addr := range addresses {
+				if addr.IPType == floating {
+					address = addr.Addr
+					break
+				}
+			}
+		}
+		result = append(result, instance{
+			ID:   osInstance.ID,
+			Addr: address,
+		})
+	}
+	return result, nil
 }
 
 func ListVolumes(client *gophercloud.ServiceClient) ([]cinder.Volume, error) {
