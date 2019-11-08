@@ -61,17 +61,16 @@ func Run() {
 		username = os.Getenv("ATTACHER_USERNAME")
 	}
 
-	volumes, err := ListVolumes(clients.Volume)
-	if err != nil {
-		glog.Fatalf("%+v", err)
-	}
-
 	instances, err := ListInstances(clients.Compute)
 	if err != nil {
 		glog.Fatalf("%+v", err)
 	}
 
 	for z := 1;  z<=5; z++ {
+		volumes, err := ListVolumes(clients.Volume)
+		if err != nil {
+			glog.Fatalf("%+v", err)
+		}
 		detach := false
 		for _, volume := range volumes {
 			if len(volume.Attachments) > 0 {
