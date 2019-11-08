@@ -53,17 +53,24 @@ func Run() {
 		glog.Fatalf("%+v", err)
 	}
 
+	detach := false
 	for _, volume := range volumes {
 		if len(volume.Attachments) > 0 {
 			detachOpts := volumeactions.DetachOpts{
 				AttachmentID: volume.Attachments[0].AttachmentID,
 			}
-
+			detach = true
+			glog.Infof("Detaching %s", volume.ID)
 			err = volumeactions.Detach(clients.Volume, volume.ID, detachOpts).ExtractErr()
 			if err != nil {
 				glog.Fatalf("%+v", err)
 			}
 		}
+	}
+
+	if detach {
+		glog.Infof("Waiting 60secs for detaching the volumes")
+		time.Sleep(60 * time.Second)
 	}
 
 	instances, err := ListInstances(clients.Compute)
