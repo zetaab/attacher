@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -55,29 +56,14 @@ func Run() {
 		glog.Fatalf("%+v", err)
 	}
 
+	username := "centos"
+	if os.Getenv("ATTACHER_USERNAME") != "" {
+		username = os.Getenv("ATTACHER_USERNAME")
+	}
+
 	volumes, err := ListVolumes(clients.Volume)
 	if err != nil {
 		glog.Fatalf("%+v", err)
-	}
-
-	detach := false
-	for _, volume := range volumes {
-		if len(volume.Attachments) > 0 {
-			detachOpts := volumeactions.DetachOpts{
-				AttachmentID: volume.Attachments[0].AttachmentID,
-			}
-			detach = true
-			glog.Infof("Detaching %s", volume.ID)
-			err = volumeactions.Detach(clients.Volume, volume.ID, detachOpts).ExtractErr()
-			if err != nil {
-				glog.Fatalf("%+v", err)
-			}
-		}
-	}
-
-	if detach {
-		glog.Infof("Waiting 60 secs for detaching the volumes")
-		time.Sleep(60 * time.Second)
 	}
 
 	instances, err := ListInstances(clients.Compute)
@@ -85,27 +71,50 @@ func Run() {
 		glog.Fatalf("%+v", err)
 	}
 
-	for i, instance := range instances {
-		volume := volumes[i]
-		glog.Infof("Attach %s to %s", volume.ID, instance.ID)
-		go attach(clients.Compute, instance.ID, volumeattach.CreateOpts{
-			VolumeID: volume.ID,
-		})
+	for z := 1;  z<=5; z++ {
+		detach := false
+		for _, volume := range volumes {
+			if len(volume.Attachments) > 0 {
+				detachOpts := volumeactions.DetachOpts{
+					AttachmentID: volume.Attachments[0].AttachmentID,
+				}
+				detach = true
+				glog.Infof("Detaching %s", volume.ID)
+				err = volumeactions.Detach(clients.Volume, volume.ID, detachOpts).ExtractErr()
+				if err != nil {
+					glog.Fatalf("%+v", err)
+				}
+			}
+		}
 
-		volume = volumes[i+3]
-		glog.Infof("Attach %s to %s", volume.ID, instance.ID)
-		go attach(clients.Compute, instance.ID, volumeattach.CreateOpts{
-			VolumeID: volume.ID,
-		})
+		if detach {
+			glog.Infof("Waiting 60 secs for detaching the volumes")
+			time.Sleep(60 * time.Second)
+		}
+		checkVolumesInInstances(instances, username, 3)
 
+		for i, instance := range instances {
+			volume := volumes[i]
+			glog.Infof("Attach %s to %s", volume.ID, instance.ID)
+			go attach(clients.Compute, instance.ID, volumeattach.CreateOpts{
+				VolumeID: volume.ID,
+			})
+
+			volume = volumes[i+3]
+			glog.Infof("Attach %s to %s", volume.ID, instance.ID)
+			go attach(clients.Compute, instance.ID, volumeattach.CreateOpts{
+				VolumeID: volume.ID,
+			})
+
+		}
+		glog.Infof("Waiting 60 secs for attach volumes")
+		time.Sleep(60 * time.Second)
+
+		checkVolumesInInstances(instances, username, 7)
 	}
-	glog.Infof("Waiting 60 secs for attach volumes")
-	time.Sleep(60 * time.Second)
+}
 
-	username := "centos"
-	if os.Getenv("ATTACHER_USERNAME") != "" {
-		username = os.Getenv("ATTACHER_USERNAME")
-	}
+func checkVolumesInInstances(instances []instance, username string, count int) {
 	for _, instance := range instances {
 		cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", username, instance.Addr), "ls -l /dev/vd* && ls /dev/disk/by-id/*")
 		var out bytes.Buffer
@@ -116,6 +125,10 @@ func Run() {
 		glog.Infof("Instance ID %s", instance.ID)
 		glog.Infof("stdout: \n%s", out.String())
 		glog.Infof("stderr: \n%s\n", serr.String())
+		countnow := len(strings.Split(out.String(), "\n"))
+		if countnow != count {
+			glog.Fatalf("Expected volume count %d the volume count is %d", count, countnow)
+		}
 	}
 }
 
