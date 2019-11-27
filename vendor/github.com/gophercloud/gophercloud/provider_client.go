@@ -350,6 +350,7 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		body = options.RawBody
 	}
 
+	fmt.Printf("%s %s OPTS %+v\n", method, url, body)
 	// Construct the http.Request.
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -412,6 +413,7 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 
 	if !ok {
 		body, _ := ioutil.ReadAll(resp.Body)
+		fmt.Printf("RESPERROR %+v\n", body)
 		resp.Body.Close()
 		respErr := ErrUnexpectedResponseCode{
 			URL:      url,
@@ -506,7 +508,6 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err == nil {
 			err = respErr
 		}
-
 		return resp, err
 	}
 
@@ -516,8 +517,8 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err := json.NewDecoder(resp.Body).Decode(options.JSONResponse); err != nil {
 			return nil, err
 		}
+		fmt.Printf("RESP %+v\n", options.JSONResponse)
 	}
-
 	return resp, nil
 }
 
