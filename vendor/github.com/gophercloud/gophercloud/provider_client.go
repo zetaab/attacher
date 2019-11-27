@@ -342,16 +342,18 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("%s %s OPTS %+v\n", method, url, string(rendered))
 
 		body = bytes.NewReader(rendered)
 		contentType = &applicationJSON
+	} else {
+		fmt.Printf("%s %s\n", method, url)
 	}
 
 	if options.RawBody != nil {
 		body = options.RawBody
 	}
 
-	fmt.Printf("%s %s OPTS %+v\n", method, url, body)
 	// Construct the http.Request.
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -412,9 +414,11 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		}
 	}
 
+	content, _ := ioutil.ReadAll(resp.Body)
+	fmt.Printf("RESP %v\n", string(content))
+	resp.Body = ioutil.NopCloser(bytes.NewReader(content))
 	if !ok {
 		body, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("RESPERROR %+v\n", body)
 		resp.Body.Close()
 		respErr := ErrUnexpectedResponseCode{
 			URL:      url,
@@ -518,7 +522,6 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err := json.NewDecoder(resp.Body).Decode(options.JSONResponse); err != nil {
 			return nil, err
 		}
-		fmt.Printf("RESP %+v\n", options.JSONResponse)
 	}
 	return resp, nil
 }
