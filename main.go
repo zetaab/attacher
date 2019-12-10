@@ -65,7 +65,7 @@ func Run() {
 		glog.Fatalf("%+v", err)
 	}
 
-	for z := 1;  z<=5; z++ {
+	for z := 1;  z<=100; z++ {
 		volumes, err := ListVolumes(clients.Volume)
 		if err != nil {
 			glog.Fatalf("%+v", err)
