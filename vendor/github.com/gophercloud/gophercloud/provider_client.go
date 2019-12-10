@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -342,12 +341,9 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("%s %s OPTS %+v\n", method, url, string(rendered))
 
 		body = bytes.NewReader(rendered)
 		contentType = &applicationJSON
-	} else {
-		fmt.Printf("%s %s\n", method, url)
 	}
 
 	if options.RawBody != nil {
@@ -414,9 +410,6 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		}
 	}
 
-	content, _ := ioutil.ReadAll(resp.Body)
-	fmt.Printf("RESP %v\n", string(content))
-	resp.Body = ioutil.NopCloser(bytes.NewReader(content))
 	if !ok {
 		body, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -513,6 +506,7 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 		if err == nil {
 			err = respErr
 		}
+
 		return resp, err
 	}
 
@@ -523,6 +517,7 @@ func (client *ProviderClient) doRequest(method, url string, options *RequestOpts
 			return nil, err
 		}
 	}
+
 	return resp, nil
 }
 

@@ -12,7 +12,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
-	"github.com/gophercloud/gophercloud/openstack/blockstorage/extensions/volumeactions"
 	cinder "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/volumeattach"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
@@ -74,12 +73,10 @@ func Run() {
 		detach := false
 		for _, volume := range volumes {
 			if len(volume.Attachments) > 0 {
-				detachOpts := volumeactions.DetachOpts{
-					AttachmentID: volume.Attachments[0].AttachmentID,
-				}
+				instanceID := volume.Attachments[0].ServerID
 				detach = true
-				glog.Infof("Detaching %s", volume.ID)
-				err = volumeactions.Detach(clients.Volume, volume.ID, detachOpts).ExtractErr()
+				glog.Infof("Detaching %s from %s", volume.ID, instanceID)
+				err = volumeattach.Delete(clients.Compute, instanceID, volume.ID).ExtractErr()
 				if err != nil {
 					glog.Fatalf("%+v", err)
 				}
